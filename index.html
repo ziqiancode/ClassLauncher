@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3557d6">
+<title>Class Launcher</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png">
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f5f7fb;--panel:#fff;--text:#152033;--muted:#667085;--border:#d9dfeb;
+  --accent:#3557d6;--accent-soft:#edf1ff;--good:#087a4b;--warn:#b54708;--bad:#b42318;
+  --today:#fff8dc;--shadow:0 8px 28px rgba(16,24,40,.08)
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#10141d;--panel:#181e29;--text:#eef2f8;--muted:#a9b2c3;--border:#2d3647;
+    --accent:#98adff;--accent-soft:#202b4e;--good:#55d69a;--warn:#fdb022;--bad:#ff8b81;
+    --today:#322c16;--shadow:none
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.app{max-width:1500px;margin:auto;padding:18px}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
+h1{font-size:26px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px}
+.actions,.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 12px;min-height:40px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:white}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.banner{display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:13px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.banner.show{display:flex}
+.banner-title{font-weight:850}.small{font-size:13px;color:var(--muted)}
+.status{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:#98a2b3}.dot.good{background:#12b76a}.dot.warn{background:#f79009}.dot.bad{background:#f04438}
+.status strong{font-size:14px}.status .desc{font-size:13px;color:var(--muted)}
+.weeknav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 10px}
+.weektitle{font-size:18px;font-weight:750;text-align:center}
+.calendar-wrap{overflow-x:auto;padding-bottom:6px}
+.calendar{display:grid;grid-template-columns:repeat(7,minmax(170px,1fr));gap:10px;min-width:1190px}
+.day{background:var(--panel);border:1px solid var(--border);border-radius:14px;min-height:470px;overflow:hidden;box-shadow:var(--shadow)}
+.day.today{outline:2px solid var(--accent);background:linear-gradient(var(--today),var(--panel) 108px)}
+.dayhead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:12px;border-bottom:1px solid var(--border)}
+.dayname{font-weight:800}.daydate{font-size:13px;color:var(--muted);margin-top:2px}
+.addday{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--panel);color:var(--accent);font-size:20px;font-weight:800;line-height:1}
+.events{padding:8px}.empty{padding:14px 6px;color:var(--muted);font-size:13px}
+.event{border:1px solid var(--border);border-radius:11px;padding:10px;margin-bottom:8px;background:var(--panel)}
+.event.disabled{opacity:.5}
+.eventtime{font-size:13px;color:var(--accent);font-weight:850}.eventname{font-weight:760;margin:3px 0 5px;word-break:break-word}.eventmeta{font-size:12px;color:var(--muted);margin-bottom:8px}
+.eventactions{display:flex;gap:6px}.eventactions button{flex:1;border:1px solid var(--border);background:transparent;color:var(--text);padding:6px 7px;border-radius:8px;font-size:12px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:14px;box-shadow:var(--shadow)}
+.panel h2{font-size:17px;margin:0 0 10px}
+.diag-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 16px}
+.diag{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border);padding:7px 0;font-size:13px}
+.diag .label{color:var(--muted)}.diag .value{text-align:right;font-weight:700;word-break:break-word}
+.good-text{color:var(--good)}.warn-text{color:var(--warn)}.bad-text{color:var(--bad)}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+dialog{width:min(570px,calc(100vw - 24px));border:1px solid var(--border);border-radius:16px;padding:0;background:var(--panel);color:var(--text);box-shadow:0 22px 80px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(4,9,18,.58)}
+.modal{padding:20px}.modal h2{margin:0 0 14px;font-size:21px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:5px}.field.full{grid-column:1/-1}
+label{font-size:13px;font-weight:700}
+input,select{width:100%;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--text);padding:9px 10px;min-height:42px}
+.daysrow{display:flex;flex-wrap:wrap;gap:7px}.daycheck{display:flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12px}.daycheck input{width:auto;min-height:auto}
+.modalactions{display:flex;justify-content:space-between;gap:8px;margin-top:18px}.rightactions{display:flex;gap:8px}
+.toast{position:fixed;right:18px;bottom:18px;max-width:390px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22);display:none;z-index:60}.toast.show{display:block}
+@media(max-width:760px){
+  .app{padding:12px}.top{flex-direction:column}.grid,.diag-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.weeknav{align-items:flex-start}.weektitle{font-size:15px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>Class Launcher</h1>
+      <div class="sub">Installable weekly class reminders with persistent desktop notifications.</div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="installBtn" hidden>Install app</button>
+      <button class="btn" id="exportBtn">Export</button>
+      <label class="btn" for="importFile">Import</label>
+      <input id="importFile" type="file" accept="application/json" hidden>
+      <button class="btn primary" id="addTop">+ Add schedule</button>
+    </div>
+  </div>
+
+  <div id="launchBanner" class="banner" aria-live="assertive">
+    <div>
+      <div id="launchTitle" class="banner-title">Class is starting</div>
+      <div id="launchSub" class="small"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="launchOpen">Open class</button>
+      <button class="btn" id="launchDismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div class="status">
+    <span id="statusDot" class="dot"></span>
+    <strong id="statusTitle">Checking notification setup…</strong>
+    <span id="statusDesc" class="desc"></span>
+    <button class="btn" id="enableNotify" style="margin-left:auto">Enable notifications</button>
+    <button class="btn" id="testNotify">Test notification</button>
+  </div>
+
+  <div class="weeknav">
+    <button class="btn" id="prevWeek">← Previous</button>
+    <div class="weektitle" id="weekTitle"></div>
+    <div class="actions">
+      <button class="btn" id="todayBtn">Today</button>
+      <button class="btn" id="nextWeek">Next →</button>
+    </div>
+  </div>
+
+  <div class="calendar-wrap">
+    <div id="calendar" class="calendar"></div>
+  </div>
+
+  <section class="panel">
+    <div class="row" style="justify-content:space-between">
+      <h2>Notification diagnostics</h2>
+      <button class="btn" id="refreshDiag">Refresh diagnostics</button>
+    </div>
+    <div class="diag-grid">
+      <div class="diag"><span class="label">Secure HTTPS context</span><span class="value" id="dSecure">—</span></div>
+      <div class="diag"><span class="label">Notification API</span><span class="value" id="dApi">—</span></div>
+      <div class="diag"><span class="label">Permission</span><span class="value" id="dPermission">—</span></div>
+      <div class="diag"><span class="label">Service workers</span><span class="value" id="dSwSupport">—</span></div>
+      <div class="diag"><span class="label">Service worker status</span><span class="value" id="dSwStatus">—</span></div>
+      <div class="diag"><span class="label">Running as installed app</span><span class="value" id="dInstalled">—</span></div>
+      <div class="diag"><span class="label">Page visibility</span><span class="value" id="dVisibility">—</span></div>
+      <div class="diag"><span class="label">Last notification test</span><span class="value" id="dLastTest">Not tested</span></div>
+    </div>
+    <div class="note">
+      A green HTTPS + permission + service-worker result means the web app itself is configured correctly.
+      If the test still does not appear in Windows, the remaining likely cause is Edge/Windows organization policy or Windows notification settings.
+    </div>
+  </section>
+
+  <div class="note">
+    For scheduled reminders, keep the installed app open or minimized. Browsers do not reliably wake a closed web app at an arbitrary class time without a server-side Push system.
+  </div>
+</div>
+
+<dialog id="eventDialog">
+<form class="modal" id="eventForm">
+  <h2 id="dialogTitle">Add schedule</h2>
+  <div class="grid">
+    <div class="field full"><label for="name">Name</label><input id="name" maxlength="100" required placeholder="e.g. Math class"></div>
+    <div class="field"><label for="date">Starting date</label><input id="date" type="date" required></div>
+    <div class="field"><label for="time">Start time</label><input id="time" type="time" required></div>
+    <div class="field"><label for="endTime">End time</label><input id="endTime" type="time" required></div>
+    <div class="field">
+      <label for="repeat">Repeat</label>
+      <select id="repeat">
+        <option>Once</option><option>Once a Week</option><option>Every 2 Weeks</option>
+        <option>Every Day</option><option>Weekdays</option><option>Custom Days</option><option>Monthly</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="reminder">Remind me before</label>
+      <select id="reminder">
+        <option value="0">At start time only</option><option value="1">1 minute</option><option value="5" selected>5 minutes</option>
+        <option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option>
+      </select>
+    </div>
+    <div class="field full" id="customDaysWrap" style="display:none"><label>Custom days</label><div class="daysrow" id="customDays"></div></div>
+    <div class="field full"><label for="link">Zoom / website link</label><input id="link" type="url" required placeholder="https://…"></div>
+    <div class="field full"><label style="display:flex;align-items:center;gap:8px;font-weight:600"><input id="enabled" type="checkbox" checked style="width:auto;min-height:auto">Schedule enabled</label></div>
+  </div>
+  <div class="modalactions">
+    <button type="button" class="btn danger" id="deleteBtn" style="visibility:hidden">Delete</button>
+    <div class="rightactions"><button type="button" class="btn" id="cancelBtn">Cancel</button><button type="submit" class="btn primary">Save</button></div>
+  </div>
+</form>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+const STORAGE_KEY="classLauncher.events.pwa.v1";
+const OLD_KEYS=["classLauncher.events.v3"];
+const FIRED_KEY="classLauncher.fired.pwa.v1";
+const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAYS_MONDAY=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const $=id=>document.getElementById(id);
+let events=loadEvents();
+let fired=loadJSON(FIRED_KEY,{});
+let weekStart=mondayOf(new Date());
+let editingId=null;
+let activeLaunch=null;
+let deferredInstallPrompt=null;
+let swRegistration=null;
+const calendar=$("calendar"), dialog=$("eventDialog"), customDaysEl=$("customDays"), toast=$("toast");
+
+function loadJSON(key,fallback){try{const r=localStorage.getItem(key);return r?JSON.parse(r):fallback}catch{return fallback}}
+function loadEvents(){
+  let e=loadJSON(STORAGE_KEY,null);
+  if(Array.isArray(e)) return e;
+  for(const key of OLD_KEYS){const old=loadJSON(key,null);if(Array.isArray(old)){localStorage.setItem(STORAGE_KEY,JSON.stringify(old));return old}}
+  return [];
+}
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(events))}
+function saveFired(){localStorage.setItem(FIRED_KEY,JSON.stringify(fired))}
+function uid(){return (crypto?.randomUUID?.()||("e-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)))}
+function dateKey(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function parseDateOnly(s){const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d,12)}
+function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate(),12);x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
+function dayDiff(a,b){return Math.round((Date.UTC(a.getFullYear(),a.getMonth(),a.getDate())-Date.UTC(b.getFullYear(),b.getMonth(),b.getDate()))/86400000)}
+function timeToMinutes(s){const [h,m]=s.split(":").map(Number);return h*60+m}
+function addMinutesToTime(s,n){const total=timeToMinutes(s)+n;const w=((total%1440)+1440)%1440;return `${String(Math.floor(w/60)).padStart(2,"0")}:${String(w%60).padStart(2,"0")}`}
+function timeLabel(s){const [h,m]=s.split(":").map(Number);return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`}
+function isInstalled(){return window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true}
+function occurrenceOn(ev,d){
+  if(ev.enabled===false)return false;
+  const start=parseDateOnly(ev.date); const diff=dayDiff(d,start); if(diff<0)return false;
+  if(ev.repeat==="Once")return diff===0;
+  if(ev.repeat==="Once a Week")return diff%7===0;
+  if(ev.repeat==="Every 2 Weeks")return diff%14===0;
+  if(ev.repeat==="Every Day")return true;
+  if(ev.repeat==="Weekdays")return d.getDay()>=1&&d.getDay()<=5;
+  if(ev.repeat==="Custom Days")return (ev.customDays||[]).includes(DAYS[d.getDay()]);
+  if(ev.repeat==="Monthly")return d.getDate()===start.getDate();
+  return false
+}
+function weekTitle(start){const end=addDays(start,6),a={month:"short",day:"numeric"},b={month:"short",day:"numeric",year:"numeric"};return `${start.toLocaleDateString(undefined,start.getFullYear()===end.getFullYear()?a:b)} – ${end.toLocaleDateString(undefined,b)}`}
+function showToast(msg){toast.textContent=msg;toast.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove("show"),3500)}
+function validURL(url){try{const u=new URL(url);return ["http:","https:"].includes(u.protocol)}catch{return false}}
+
+function render(){
+  $("weekTitle").textContent=weekTitle(weekStart); calendar.innerHTML="";
+  const today=new Date();
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i), section=document.createElement("section");
+    section.className="day"+(sameDay(d,today)?" today":"");
+    const head=document.createElement("div");head.className="dayhead";
+    const tw=document.createElement("div"),dn=document.createElement("div"),dd=document.createElement("div");
+    dn.className="dayname";dn.textContent=d.toLocaleDateString(undefined,{weekday:"long"})+(sameDay(d,today)?" • Today":"");
+    dd.className="daydate";dd.textContent=d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+    tw.append(dn,dd);
+    const add=document.createElement("button");add.className="addday";add.type="button";add.textContent="+";add.title="Add schedule";add.addEventListener("click",()=>openAdd(d));
+    head.append(tw,add);
+    const list=document.createElement("div");list.className="events";
+    const occ=events.filter(e=>occurrenceOn(e,d)).sort((a,b)=>a.time.localeCompare(b.time));
+    if(!occ.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No classes";list.appendChild(empty)}
+    else occ.forEach(ev=>list.appendChild(eventCard(ev)));
+    section.append(head,list);calendar.appendChild(section)
+  }
+}
+function eventCard(ev){
+  const c=document.createElement("div");c.className="event"+(ev.enabled===false?" disabled":"");
+  const t=document.createElement("div");t.className="eventtime";t.textContent=`${timeLabel(ev.time)} – ${timeLabel(ev.endTime||addMinutesToTime(ev.time,60))}`;
+  const n=document.createElement("div");n.className="eventname";n.textContent=ev.name;
+  const m=document.createElement("div");m.className="eventmeta";m.textContent=`${ev.repeat} • ${ev.reminder||0} min reminder`;
+  const a=document.createElement("div");a.className="eventactions";
+  const o=document.createElement("button");o.type="button";o.textContent="Open";o.addEventListener("click",()=>openLink(ev));
+  const ed=document.createElement("button");ed.type="button";ed.textContent="Edit";ed.addEventListener("click",()=>openEdit(ev));
+  a.append(o,ed);c.append(t,n,m,a);return c
+}
+function buildCustomDays(){
+  customDaysEl.innerHTML="";
+  DAYS_MONDAY.forEach(day=>{const l=document.createElement("label");l.className="daycheck";const cb=document.createElement("input");cb.type="checkbox";cb.dataset.day=day;l.append(cb,document.createTextNode(day));customDaysEl.appendChild(l)})
+}
+function syncCustom(){ $("customDaysWrap").style.display=$("repeat").value==="Custom Days"?"flex":"none" }
+function openAdd(d){
+  editingId=null;$("dialogTitle").textContent="Add schedule";$("name").value="";$("date").value=dateKey(d);$("time").value="09:00";$("endTime").value="10:00";
+  $("repeat").value="Once";$("reminder").value="5";$("link").value="";$("enabled").checked=true;$("deleteBtn").style.visibility="hidden";
+  customDaysEl.querySelectorAll("input").forEach(x=>x.checked=false);syncCustom();dialog.showModal();setTimeout(()=>$("name").focus(),20)
+}
+function openEdit(ev){
+  editingId=ev.id;$("dialogTitle").textContent="Edit schedule";$("name").value=ev.name;$("date").value=ev.date;$("time").value=ev.time;$("endTime").value=ev.endTime||addMinutesToTime(ev.time,60);
+  $("repeat").value=ev.repeat;$("reminder").value=String(ev.reminder||0);$("link").value=ev.link;$("enabled").checked=ev.enabled!==false;$("deleteBtn").style.visibility="visible";
+  customDaysEl.querySelectorAll("input").forEach(x=>x.checked=(ev.customDays||[]).includes(x.dataset.day));syncCustom();dialog.showModal()
+}
+$("eventForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const name=$("name").value.trim(),date=$("date").value,time=$("time").value,endTime=$("endTime").value,repeat=$("repeat").value,reminder=Number($("reminder").value),link=$("link").value.trim();
+  if(!name||!date||!time||!endTime||!link)return showToast("Fill in name, date, start time, end time, and link.");
+  if(timeToMinutes(endTime)<=timeToMinutes(time))return showToast("End time must be later than start time.");
+  if(!validURL(link))return showToast("Enter a valid http:// or https:// link.");
+  const customDays=[...customDaysEl.querySelectorAll("input:checked")].map(x=>x.dataset.day);
+  if(repeat==="Custom Days"&&!customDays.length)return showToast("Choose at least one custom day.");
+  const ev={id:editingId||uid(),name,date,time,endTime,repeat,reminder,link,customDays,enabled:$("enabled").checked};
+  if(editingId)events=events.map(x=>x.id===editingId?ev:x);else events.push(ev);
+  save();dialog.close();render();showToast(editingId?"Schedule updated.":"Schedule added.")
+});
+$("deleteBtn").addEventListener("click",()=>{if(!editingId)return;const ev=events.find(x=>x.id===editingId);if(ev&&confirm(`Delete "${ev.name}"?`)){events=events.filter(x=>x.id!==editingId);save();dialog.close();render();showToast("Schedule deleted.")}});
+$("cancelBtn").addEventListener("click",()=>dialog.close());$("repeat").addEventListener("change",syncCustom);
+function openLink(ev){window.open(ev.link,"_blank","noopener")}
+function dismissLaunch(){activeLaunch=null;$("launchBanner").classList.remove("show");document.title="Class Launcher"}
+function showLaunch(ev){activeLaunch=ev;$("launchTitle").textContent=`${ev.name} is starting`;$("launchSub").textContent=`${timeLabel(ev.time)} – ${timeLabel(ev.endTime||addMinutesToTime(ev.time,60))} • Click Open class.`;$("launchBanner").classList.add("show");document.title=`🔔 ${ev.name} — Class Launcher`;beep()}
+$("launchOpen").addEventListener("click",()=>{if(activeLaunch)openLink(activeLaunch);dismissLaunch()});$("launchDismiss").addEventListener("click",dismissLaunch);
+
+async function registerSW(){
+  if(!("serviceWorker" in navigator)||!window.isSecureContext)return null;
+  try{swRegistration=await navigator.serviceWorker.register("./sw.js");await navigator.serviceWorker.ready;refreshDiagnostics();return swRegistration}
+  catch(err){console.error(err);swRegistration=null;refreshDiagnostics();return null}
+}
+async function requestNotifications(){
+  if(!("Notification" in window))return showToast("This browser does not expose the Notification API.");
+  try{const p=await Notification.requestPermission();showToast(`Notification permission: ${p}.`);await refreshDiagnostics()}
+  catch(err){showToast(`Permission request failed: ${err.message||err}`);await refreshDiagnostics()}
+}
+async function persistentNotification(title,body,ev=null,isTest=false){
+  if(!("Notification" in window)||Notification.permission!=="granted")throw new Error("Notification permission is not granted.");
+  const reg=swRegistration||await navigator.serviceWorker?.getRegistration();
+  const opts={body,tag:isTest?`test-${Date.now()}`:`class-${ev?.id||Date.now()}`,requireInteraction:!isTest,icon:"./icons/icon-192.png",badge:"./icons/icon-192.png",data:{url:ev?.link||location.href}};
+  if(reg&&reg.showNotification){await reg.showNotification(title,opts);return "service worker"}
+  const n=new Notification(title,opts);if(ev)n.onclick=()=>{window.focus();openLink(ev);n.close()};return "page"
+}
+$("enableNotify").addEventListener("click",requestNotifications);
+$("testNotify").addEventListener("click",async()=>{
+  if(Notification?.permission==="default")await requestNotifications();
+  const target=$("dLastTest");
+  try{
+    const method=await persistentNotification("Class Launcher test","If you can see this, desktop notifications are working.",null,true);
+    target.textContent=`Sent via ${method} at ${new Date().toLocaleTimeString()}`;target.className="value good-text";showToast("Test notification sent.");
+  }catch(err){
+    target.textContent=`Failed: ${err.message||err}`;target.className="value bad-text";showToast(`Notification failed: ${err.message||err}`)
+  }
+});
+async function refreshDiagnostics(){
+  const set=(id,text,cls)=>{const el=$(id);el.textContent=text;el.className="value "+(cls||"")};
+  set("dSecure",window.isSecureContext?`Yes (${location.protocol})`:`No (${location.protocol})`,window.isSecureContext?"good-text":"bad-text");
+  set("dApi","Notification" in window?"Available":"Unavailable","Notification" in window?"good-text":"bad-text");
+  const perm=("Notification" in window)?Notification.permission:"unavailable";
+  set("dPermission",perm,perm==="granted"?"good-text":perm==="denied"?"bad-text":"warn-text");
+  set("dSwSupport","serviceWorker" in navigator?"Supported":"Unsupported","serviceWorker" in navigator?"good-text":"bad-text");
+  let reg=null;
+  try{reg=("serviceWorker" in navigator)?await navigator.serviceWorker.getRegistration():null}catch{}
+  const swText=reg?(reg.active?"Active":reg.installing?"Installing":reg.waiting?"Waiting":"Registered"):"Not registered";
+  set("dSwStatus",swText,reg?.active?"good-text":reg?"warn-text":"bad-text");
+  set("dInstalled",isInstalled()?"Yes":"No",isInstalled()?"good-text":"warn-text");
+  set("dVisibility",document.visibilityState,document.visibilityState==="visible"?"good-text":"warn-text");
+  updateStatus(reg)
+}
+function updateStatus(reg){
+  const dot=$("statusDot"),title=$("statusTitle"),desc=$("statusDesc"),btn=$("enableNotify");
+  dot.className="dot";
+  if(!window.isSecureContext){dot.classList.add("bad");title.textContent="Not running on HTTPS";desc.textContent="Deploy this folder to an HTTPS host first.";btn.disabled=true;return}
+  if(!("Notification" in window)){dot.classList.add("bad");title.textContent="Notifications unavailable";desc.textContent="The browser or policy does not expose the API.";btn.disabled=true;return}
+  if(Notification.permission==="denied"){dot.classList.add("bad");title.textContent="Notifications blocked";desc.textContent="Edge, Windows, or organization policy may be blocking them.";btn.disabled=true;return}
+  if(Notification.permission!=="granted"){dot.classList.add("warn");title.textContent="Notifications need permission";desc.textContent="Click Enable notifications.";btn.disabled=false;return}
+  if(!reg?.active){dot.classList.add("warn");title.textContent="Permission granted; service worker not active";desc.textContent="Refresh once after deployment.";btn.disabled=true;return}
+  dot.classList.add("good");title.textContent="Notification setup looks healthy";desc.textContent=isInstalled()?"Installed app detected.":"You can also install this site as an app.";btn.disabled=true
+}
+function occurrenceDateTime(ev,d){const[h,m]=ev.time.split(":").map(Number);return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m)}
+function markFired(k){fired[k]=Date.now();saveFired()}
+function pruneFired(){const cut=Date.now()-8*86400000;let changed=false;Object.keys(fired).forEach(k=>{if(fired[k]<cut){delete fired[k];changed=true}});if(changed)saveFired()}
+async function checkSchedule(){
+  const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+  for(const ev of events){
+    if(!occurrenceOn(ev,today))continue;
+    const start=occurrenceDateTime(ev,today),nowMs=Date.now(),startMs=start.getTime(),reminderMs=Number(ev.reminder||0)*60000,dateStr=dateKey(today);
+    const rk=`${ev.id}|${dateStr}|reminder`,sk=`${ev.id}|${dateStr}|start`;
+    if(reminderMs>0&&nowMs>=startMs-reminderMs&&nowMs<startMs-reminderMs+60000&&!fired[rk]){
+      markFired(rk);beep();showToast(`${ev.name} starts in ${ev.reminder} minutes.`);
+      try{await persistentNotification(`${ev.name} starts in ${ev.reminder} minutes`,`${timeLabel(ev.time)} – ${timeLabel(ev.endTime||addMinutesToTime(ev.time,60))}. Click to open.`,ev)}catch{}
+    }
+    if(nowMs>=startMs&&nowMs<startMs+120000&&!fired[sk]){
+      markFired(sk);showLaunch(ev);
+      try{await persistentNotification(`${ev.name} is starting now`,"Click this notification to open the class.",ev)}catch{}
+    }
+  }
+}
+function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.setValueAtTime(.08,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.4);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.4);o.onended=()=>c.close()}catch{}}
+
+$("prevWeek").addEventListener("click",()=>{weekStart=addDays(weekStart,-7);render()});
+$("nextWeek").addEventListener("click",()=>{weekStart=addDays(weekStart,7);render()});
+$("todayBtn").addEventListener("click",()=>{weekStart=mondayOf(new Date());render()});
+$("addTop").addEventListener("click",()=>openAdd(new Date()));
+$("refreshDiag").addEventListener("click",refreshDiagnostics);
+$("exportBtn").addEventListener("click",()=>{const blob=new Blob([JSON.stringify({version:"pwa-1",events},null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`class-launcher-${dateKey(new Date())}.json`;document.body.appendChild(a);a.click();const u=a.href;a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)});
+$("importFile").addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;try{const p=JSON.parse(await f.text()),incoming=Array.isArray(p)?p:p.events;if(!Array.isArray(incoming))throw new Error();if(confirm(`Replace the current schedule with ${incoming.length} imported item(s)?`)){events=incoming;save();render();showToast("Schedule imported.")}}catch{showToast("Invalid Class Launcher schedule file.")}finally{e.target.value=""}});
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;$("installBtn").hidden=false});
+$("installBtn").addEventListener("click",async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;$("installBtn").hidden=true;refreshDiagnostics()});
+window.addEventListener("appinstalled",()=>{showToast("Class Launcher installed.");refreshDiagnostics()});
+document.addEventListener("visibilitychange",()=>{refreshDiagnostics();if(document.visibilityState==="visible")checkSchedule()});
+navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="OPEN_URL"&&event.data.url)window.open(event.data.url,"_blank","noopener")});
+
+buildCustomDays();render();pruneFired();refreshDiagnostics();registerSW().then(()=>checkSchedule());
+setInterval(checkSchedule,10000);setInterval(pruneFired,3600000);
+})();
+</script>
+</body>
+</html>
