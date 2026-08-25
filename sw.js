@@ -1,4 +1,4 @@
-const CACHE_NAME = "class-launcher-pwa-v2";
+const CACHE_NAME = "class-launcher-pwa-v2-2";
 const APP_SHELL = [
   "./",
   "./index.html",
