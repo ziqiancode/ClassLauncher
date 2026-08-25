@@ -81,7 +81,7 @@ input,select{width:100%;border:1px solid var(--border);border-radius:9px;backgro
   <div class="top">
     <div>
       <h1>Class Launcher</h1>
-      <div class="sub">Installable weekly class reminders with persistent desktop notifications.</div>
+      <div class="sub">Installable weekly class reminders with persistent desktop notifications. <b>v2.1</b></div>
     </div>
     <div class="actions">
       <button class="btn" id="installBtn" hidden>Install app</button>
@@ -309,9 +309,34 @@ async function registerSW(){
   catch(err){console.error(err);swRegistration=null;refreshDiagnostics();return null}
 }
 async function requestNotifications(){
-  if(!("Notification" in window))return showToast("This browser does not expose the Notification API.");
-  try{const p=await Notification.requestPermission();showToast(`Notification permission: ${p}.`);await refreshDiagnostics()}
-  catch(err){showToast(`Permission request failed: ${err.message||err}`);await refreshDiagnostics()}
+  if(!("Notification" in window)){
+    showToast("Desktop notifications are unavailable in this Edge profile. Your Microsoft organization may be blocking the Notification API.");
+    await refreshDiagnostics();
+    return "unavailable";
+  }
+
+  if(Notification.permission==="granted"){
+    showToast("Notification permission is already enabled.");
+    await refreshDiagnostics();
+    return "granted";
+  }
+
+  if(Notification.permission==="denied"){
+    showToast("Notifications are blocked by Edge, Windows, or organization policy. Check the diagnostics below.");
+    await refreshDiagnostics();
+    return "denied";
+  }
+
+  try{
+    const p=await Notification.requestPermission();
+    showToast(`Notification permission: ${p}.`);
+    await refreshDiagnostics();
+    return p;
+  }catch(err){
+    showToast(`Permission request failed: ${err.message||err}`);
+    await refreshDiagnostics();
+    return "error";
+  }
 }
 async function persistentNotification(title,body,ev=null,isTest=false){
   if(!("Notification" in window)||Notification.permission!=="granted")throw new Error("Notification permission is not granted.");
@@ -322,14 +347,50 @@ async function persistentNotification(title,body,ev=null,isTest=false){
 }
 $("enableNotify").addEventListener("click",requestNotifications);
 $("testNotify").addEventListener("click",async()=>{
-  if(Notification?.permission==="default")await requestNotifications();
   const target=$("dLastTest");
-  try{
-    const method=await persistentNotification("Class Launcher test","If you can see this, desktop notifications are working.",null,true);
-    target.textContent=`Sent via ${method} at ${new Date().toLocaleTimeString()}`;target.className="value good-text";showToast("Test notification sent.");
-  }catch(err){
-    target.textContent=`Failed: ${err.message||err}`;target.className="value bad-text";showToast(`Notification failed: ${err.message||err}`)
+
+  // Always give immediate visual feedback so a click never appears to do nothing.
+  target.textContent="Running test…";
+  target.className="value warn-text";
+  showToast("Running notification test…");
+
+  if(!("Notification" in window)){
+    target.textContent="Unavailable: Notification API is blocked or missing";
+    target.className="value bad-text";
+    showToast("This Edge profile does not expose desktop notifications. A Microsoft organization policy may be blocking them.");
+    await refreshDiagnostics();
+    return;
   }
+
+  if(Notification.permission==="default"){
+    await requestNotifications();
+  }
+
+  if(Notification.permission!=="granted"){
+    target.textContent=`Cannot send: permission is ${Notification.permission}`;
+    target.className="value bad-text";
+    showToast(`Cannot send notification because permission is ${Notification.permission}.`);
+    await refreshDiagnostics();
+    return;
+  }
+
+  try{
+    const method=await persistentNotification(
+      "Class Launcher test",
+      "If you can see this, desktop notifications are working.",
+      null,
+      true
+    );
+    target.textContent=`Sent via ${method} at ${new Date().toLocaleTimeString()}`;
+    target.className="value good-text";
+    showToast("Test notification sent. If Windows shows nothing, check Windows notification settings or organization policy.");
+  }catch(err){
+    target.textContent=`Failed: ${err.message||err}`;
+    target.className="value bad-text";
+    showToast(`Notification failed: ${err.message||err}`);
+  }
+
+  await refreshDiagnostics();
 });
 async function refreshDiagnostics(){
   const set=(id,text,cls)=>{const el=$(id);el.textContent=text;el.className="value "+(cls||"")};
@@ -349,12 +410,52 @@ async function refreshDiagnostics(){
 function updateStatus(reg){
   const dot=$("statusDot"),title=$("statusTitle"),desc=$("statusDesc"),btn=$("enableNotify");
   dot.className="dot";
-  if(!window.isSecureContext){dot.classList.add("bad");title.textContent="Not running on HTTPS";desc.textContent="Deploy this folder to an HTTPS host first.";btn.disabled=true;return}
-  if(!("Notification" in window)){dot.classList.add("bad");title.textContent="Notifications unavailable";desc.textContent="The browser or policy does not expose the API.";btn.disabled=true;return}
-  if(Notification.permission==="denied"){dot.classList.add("bad");title.textContent="Notifications blocked";desc.textContent="Edge, Windows, or organization policy may be blocking them.";btn.disabled=true;return}
-  if(Notification.permission!=="granted"){dot.classList.add("warn");title.textContent="Notifications need permission";desc.textContent="Click Enable notifications.";btn.disabled=false;return}
-  if(!reg?.active){dot.classList.add("warn");title.textContent="Permission granted; service worker not active";desc.textContent="Refresh once after deployment.";btn.disabled=true;return}
-  dot.classList.add("good");title.textContent="Notification setup looks healthy";desc.textContent=isInstalled()?"Installed app detected.":"You can also install this site as an app.";btn.disabled=true
+  btn.disabled=false;
+
+  if(!window.isSecureContext){
+    dot.classList.add("bad");
+    title.textContent="Not running on HTTPS";
+    desc.textContent="Open the GitHub Pages https:// address, not the GitHub file preview.";
+    btn.textContent="Why unavailable?";
+    return;
+  }
+
+  if(!("Notification" in window)){
+    dot.classList.add("bad");
+    title.textContent="Notification API unavailable";
+    desc.textContent="This Edge profile or Microsoft organization policy is blocking browser notifications.";
+    btn.textContent="Why unavailable?";
+    return;
+  }
+
+  if(Notification.permission==="denied"){
+    dot.classList.add("bad");
+    title.textContent="Notifications blocked";
+    desc.textContent="Edge, Windows, or organization policy is denying permission.";
+    btn.textContent="Check permission";
+    return;
+  }
+
+  if(Notification.permission!=="granted"){
+    dot.classList.add("warn");
+    title.textContent="Notifications need permission";
+    desc.textContent="Click Enable notifications.";
+    btn.textContent="Enable notifications";
+    return;
+  }
+
+  if(!reg?.active){
+    dot.classList.add("warn");
+    title.textContent="Permission granted; service worker not active yet";
+    desc.textContent="Refresh the page once. The Test button will still explain any failure.";
+    btn.textContent="Already enabled";
+    return;
+  }
+
+  dot.classList.add("good");
+  title.textContent="Notification setup looks healthy";
+  desc.textContent=isInstalled()?"Installed app detected.":"You can also install this site as an app.";
+  btn.textContent="Already enabled";
 }
 function occurrenceDateTime(ev,d){const[h,m]=ev.time.split(":").map(Number);return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m)}
 function markFired(k){fired[k]=Date.now();saveFired()}
