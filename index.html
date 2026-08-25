@@ -81,7 +81,7 @@ input,select{width:100%;border:1px solid var(--border);border-radius:9px;backgro
   <div class="top">
     <div>
       <h1>Class Launcher</h1>
-      <div class="sub">Installable weekly class reminders with persistent desktop notifications. <b>v2.1</b></div>
+      <div class="sub">Installable weekly class reminders with persistent desktop notifications. <b>v2.2</b></div>
     </div>
     <div class="actions">
       <button class="btn" id="installBtn" hidden>Install app</button>
@@ -137,6 +137,8 @@ input,select{width:100%;border:1px solid var(--border);border-radius:9px;backgro
       <div class="diag"><span class="label">Service worker status</span><span class="value" id="dSwStatus">—</span></div>
       <div class="diag"><span class="label">Running as installed app</span><span class="value" id="dInstalled">—</span></div>
       <div class="diag"><span class="label">Page visibility</span><span class="value" id="dVisibility">—</span></div>
+      <div class="diag"><span class="label">Scheduler last checked</span><span class="value" id="dScheduler">Waiting…</span></div>
+      <div class="diag"><span class="label">Next scheduled reminder</span><span class="value" id="dNextReminder">None</span></div>
       <div class="diag"><span class="label">Last notification test</span><span class="value" id="dLastTest">Not tested</span></div>
     </div>
     <div class="note">
@@ -294,7 +296,9 @@ $("eventForm").addEventListener("submit",e=>{
   if(repeat==="Custom Days"&&!customDays.length)return showToast("Choose at least one custom day.");
   const ev={id:editingId||uid(),name,date,time,endTime,repeat,reminder,link,customDays,enabled:$("enabled").checked};
   if(editingId)events=events.map(x=>x.id===editingId?ev:x);else events.push(ev);
-  save();dialog.close();render();showToast(editingId?"Schedule updated.":"Schedule added.")
+  save();dialog.close();render();showToast(editingId?"Schedule updated.":"Schedule added.");
+  checkSchedule();
+  refreshDiagnostics();
 });
 $("deleteBtn").addEventListener("click",()=>{if(!editingId)return;const ev=events.find(x=>x.id===editingId);if(ev&&confirm(`Delete "${ev.name}"?`)){events=events.filter(x=>x.id!==editingId);save();dialog.close();render();showToast("Schedule deleted.")}});
 $("cancelBtn").addEventListener("click",()=>dialog.close());$("repeat").addEventListener("change",syncCustom);
@@ -405,6 +409,7 @@ async function refreshDiagnostics(){
   set("dSwStatus",swText,reg?.active?"good-text":reg?"warn-text":"bad-text");
   set("dInstalled",isInstalled()?"Yes":"No",isInstalled()?"good-text":"warn-text");
   set("dVisibility",document.visibilityState,document.visibilityState==="visible"?"good-text":"warn-text");
+  updateSchedulerDiagnostics();
   updateStatus(reg)
 }
 function updateStatus(reg){
@@ -458,23 +463,124 @@ function updateStatus(reg){
   btn.textContent="Already enabled";
 }
 function occurrenceDateTime(ev,d){const[h,m]=ev.time.split(":").map(Number);return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m)}
+
+function nextReminderInfo(){
+  const now=new Date();
+  let best=null;
+  // Look ahead 14 days so recurring weekly items are visible.
+  for(let offset=0;offset<14;offset++){
+    const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+offset,12);
+    for(const ev of events){
+      if(!occurrenceOn(ev,d))continue;
+      const start=occurrenceDateTime(ev,d);
+      const reminderAt=new Date(start.getTime()-Number(ev.reminder||0)*60000);
+      // If reminder time has already passed but class hasn't started, the scheduler
+      // will catch up immediately, so treat "now" as the effective reminder.
+      const effective = reminderAt.getTime() < now.getTime() && start.getTime() > now.getTime()
+        ? now
+        : reminderAt;
+      if(effective.getTime() < now.getTime()-1000)continue;
+      if(!best || effective<best.when){
+        best={when:effective,ev,start};
+      }
+    }
+  }
+  return best;
+}
+
+function updateSchedulerDiagnostics(){
+  const ds=$("dScheduler"), dn=$("dNextReminder");
+  if(ds){
+    ds.textContent=new Date().toLocaleTimeString();
+    ds.className="value good-text";
+  }
+  if(dn){
+    const next=nextReminderInfo();
+    if(next){
+      const same=dateKey(next.when)===dateKey(new Date());
+      dn.textContent=`${next.ev.name} — ${same?"today ":next.when.toLocaleDateString()+" "}${next.when.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`;
+      dn.className="value good-text";
+    }else{
+      dn.textContent="None in next 14 days";
+      dn.className="value warn-text";
+    }
+  }
+}
+
 function markFired(k){fired[k]=Date.now();saveFired()}
 function pruneFired(){const cut=Date.now()-8*86400000;let changed=false;Object.keys(fired).forEach(k=>{if(fired[k]<cut){delete fired[k];changed=true}});if(changed)saveFired()}
 async function checkSchedule(){
-  const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+  const now=new Date();
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+  updateSchedulerDiagnostics();
+
   for(const ev of events){
     if(!occurrenceOn(ev,today))continue;
-    const start=occurrenceDateTime(ev,today),nowMs=Date.now(),startMs=start.getTime(),reminderMs=Number(ev.reminder||0)*60000,dateStr=dateKey(today);
-    const rk=`${ev.id}|${dateStr}|reminder`,sk=`${ev.id}|${dateStr}|start`;
-    if(reminderMs>0&&nowMs>=startMs-reminderMs&&nowMs<startMs-reminderMs+60000&&!fired[rk]){
-      markFired(rk);beep();showToast(`${ev.name} starts in ${ev.reminder} minutes.`);
-      try{await persistentNotification(`${ev.name} starts in ${ev.reminder} minutes`,`${timeLabel(ev.time)} – ${timeLabel(ev.endTime||addMinutesToTime(ev.time,60))}. Click to open.`,ev)}catch{}
+
+    const start=occurrenceDateTime(ev,today);
+    const startMs=start.getTime();
+    const endTime=ev.endTime||addMinutesToTime(ev.time,60);
+    const [eh,em]=endTime.split(":").map(Number);
+    const end=new Date(today.getFullYear(),today.getMonth(),today.getDate(),eh,em,0,0);
+    const endMs=end.getTime();
+
+    const nowMs=Date.now();
+    const reminderMs=Number(ev.reminder||0)*60000;
+    const reminderAt=startMs-reminderMs;
+    const dateStr=dateKey(today);
+
+    // Include the scheduled start time in the key. If the user edits an event
+    // to a new time on the same day, it can notify again correctly.
+    const baseKey=`${ev.id}|${dateStr}|${ev.time}`;
+    const rk=`${baseKey}|reminder`;
+    const sk=`${baseKey}|start`;
+
+    // Catch-up reminder:
+    // Once the reminder time has arrived, notify at ANY point before class starts.
+    // This prevents a sleeping/throttled background tab from missing a 60-second window.
+    // It also means if you create a class 2 minutes before it starts with a 5-minute
+    // reminder, you get the reminder immediately.
+    if(
+      reminderMs>0 &&
+      nowMs>=reminderAt &&
+      nowMs<startMs &&
+      !fired[rk]
+    ){
+      markFired(rk);
+      beep();
+      showToast(`${ev.name} starts in ${Math.max(1,Math.ceil((startMs-nowMs)/60000))} minute(s).`);
+      try{
+        await persistentNotification(
+          `${ev.name} is starting soon`,
+          `${timeLabel(ev.time)} – ${timeLabel(endTime)}. Click to open.`,
+          ev
+        );
+      }catch(err){
+        console.warn("Reminder notification failed:",err);
+      }
     }
-    if(nowMs>=startMs&&nowMs<startMs+120000&&!fired[sk]){
-      markFired(sk);showLaunch(ev);
-      try{await persistentNotification(`${ev.name} is starting now`,"Click this notification to open the class.",ev)}catch{}
+
+    // Start-time catch-up:
+    // If Edge wakes the app late, notify as long as the class is still in progress.
+    if(
+      nowMs>=startMs &&
+      nowMs<endMs &&
+      !fired[sk]
+    ){
+      markFired(sk);
+      showLaunch(ev);
+      try{
+        await persistentNotification(
+          `${ev.name} is starting now`,
+          `${timeLabel(ev.time)} – ${timeLabel(endTime)}. Click to open the class.`,
+          ev
+        );
+      }catch(err){
+        console.warn("Start notification failed:",err);
+      }
     }
   }
+  updateSchedulerDiagnostics();
 }
 function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.setValueAtTime(.08,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.4);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.4);o.onended=()=>c.close()}catch{}}
 
@@ -492,7 +598,7 @@ document.addEventListener("visibilitychange",()=>{refreshDiagnostics();if(docume
 navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="OPEN_URL"&&event.data.url)window.open(event.data.url,"_blank","noopener")});
 
 buildCustomDays();render();pruneFired();refreshDiagnostics();registerSW().then(()=>checkSchedule());
-setInterval(checkSchedule,10000);setInterval(pruneFired,3600000);
+setInterval(checkSchedule,5000);setInterval(pruneFired,3600000);
 })();
 </script>
 </body>
